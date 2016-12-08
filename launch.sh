@@ -32,14 +32,18 @@ aws ec2 authorize-security-group-ingress --group-name $FWNAME --protocol icmp --
 # create and start the proxy
 ID_PROXY=$(aws ec2 run-instances --image-id $TEMPLATE_PROXY --instance-type m1.medium --security-group-ids $SGGROUPID --endpoint-url $ENDPOINTURL --output text| awk '/INSTANCE/{print $2}')
 aws ec2 create-tags --resources $ID_PROXY --tags Key=name,Value=proxy --endpoint-url $ENDPOINTURL
+# take a little nap so instance can get IP
+sleep 10
 # get the private IP of the proxy instance
 aws ec2 describe-instances --instance-ids $ID_PROXY --endpoint-url $ENDPOINTURL --query "Reservations[*].Instances[*].PrivateIpAddress" --output=text > /tmp/privateip.txt
 #
 # build a userdata script ;-)
-echo consul join $(cat /tmp/privateip.txt) > /tmp/userdata
+echo "#!/bin/bash" > /tmp/userdata
+echo consul join $(cat /tmp/privateip.txt) >> /tmp/userdata
+echo " ">> /tmp/userdata
 
 # sleep for X seconds because the proxy has to start some services before other instances are launched
-sleep 10
+sleep 30
 
 # create and start appserver
 ID_APPSERVER=$(aws ec2 run-instances --image-id $TEMPLATE_APPSERVER --instance-type m1.medium --user-data file:///tmp/userdata --no-associate-public-ip-address --endpoint-url $ENDPOINTURL --output text| awk '/INSTANCE/{print $2}')
